@@ -1,0 +1,62 @@
+# ============================================================
+#  RV1126B On-Board Makefile (RKNN + OpenCV + GStreamer)
+# ============================================================
+
+CC  = gcc
+CXX = g++
+
+TARGET = rtsp_test
+
+# 库路径 (pkg-config)
+GST_CFLAGS  = $(shell pkg-config --cflags gstreamer-1.0 gstreamer-app-1.0 gstreamer-base-1.0)
+GST_LIBS    = $(shell pkg-config --libs   gstreamer-1.0 gstreamer-app-1.0 gstreamer-base-1.0)
+CV_CFLAGS   = $(shell pkg-config --cflags opencv4)
+CV_LIBS     = $(shell pkg-config --libs   opencv4)
+
+# RKNN (头文件在当前目录, .so 在系统 /usr/lib)
+RKNN_CFLAGS = -I.
+RKNN_LIBS   = -L/usr/lib -lrknnrt -ldl
+
+# 源文件
+CSRCS    = main.c capture.c rtsp_service.c rtsp_stream.c tcp_server.c \
+           sensor.c uart.c voice_service.c oled.c font.c oled_display.c \
+           servo_thread.c tracker.c pca9685.c fifo_rx.c audio_receiver.c
+CXXSRCS  = ai_processor.c recorder.c rknn_infer.c
+OBJS     = $(CSRCS:.c=.o) ai_processor.o recorder.o rknn_infer.o
+
+# 编译选项
+CFLAGS   = -Wall -O2 -std=gnu11 -pthread $(GST_CFLAGS) $(RKNN_CFLAGS)
+CXXFLAGS = -Wall -O2 -std=c++11 -pthread $(GST_CFLAGS) $(CV_CFLAGS) $(RKNN_CFLAGS) \
+           -DCV_BRANCH_HAS_OPENCV
+LDFLAGS  = -pthread $(GST_LIBS) $(CV_LIBS) $(RKNN_LIBS) -lrga -lrockchip_mpp -lm
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) $(OBJS) -o $(TARGET) $(LDFLAGS)
+
+# C 源文件
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# .cpp → .o (OpenCV C++ 文件)
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# ai_processor.o 用 g++ (OpenCV C++ 头文件)
+ai_processor.o: ai_processor.c ai_processor.h rknn_infer.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# recorder.o 用 g++ (OpenCV C++)
+recorder.o: recorder.c recorder.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# rknn_infer.o 用 g++ (OpenCV C++ 预处理优化)
+rknn_infer.o: rknn_infer.c rknn_infer.h rknn_api.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+
+clean:
+	rm -f $(OBJS) $(TARGET)
+
+.PHONY: all clean
