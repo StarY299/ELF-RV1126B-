@@ -1408,7 +1408,7 @@ class MonitorWindow(QMainWindow):
             data = self.audio_proc.readAllStandardOutput()
             if data:
                 try:
-                    self.audio_sock.sendto(bytes(data), ('192.168.0.232', 9998))
+                    self.audio_sock.sendto(bytes(data), (self.config['host'], 9998))
                 except Exception:
                     pass
 
